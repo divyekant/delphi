@@ -419,10 +419,12 @@ For each numbered step in the case:
    - Background: Check logs, query database, inspect process state
 
 2. **Capture evidence immediately after the action:**
-   - UI: Take screenshot via `computer screenshot`
-   - API: Save full response (status code + headers + body)
-   - CLI: Save stdout, stderr, and exit code
-   - Background: Save relevant log lines or query results
+   - Create evidence directory: `tests/guided-cases/evidence/gc-XXX/`
+   - UI: Take screenshot, save as `tests/guided-cases/evidence/gc-XXX/step-N.png`
+   - API: Save full response to `tests/guided-cases/evidence/gc-XXX/step-N-response.json`
+   - CLI: Save output to `tests/guided-cases/evidence/gc-XXX/step-N-output.txt`
+   - Background: Save log lines to `tests/guided-cases/evidence/gc-XXX/step-N-logs.txt`
+   - **Never embed evidence content in the report** — reference by path only
 
 3. **Verify expected outcomes:**
    - Compare actual result against EACH "Expected" item in the step
