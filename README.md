@@ -104,6 +104,7 @@ See `examples/` for complete reference cases.
 
 ## Docs
 
+- [LLM Quickstart](docs/llm-quickstart.md) — paste into any LLM for full Delphi context
 - [Vision & Scope](docs/VISION.md) — full project vision, principles, and format spec
 - [Design](docs/plans/2026-02-27-delphi-design.md) — architecture decisions
 
