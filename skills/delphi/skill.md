@@ -242,6 +242,17 @@ After user confirms flows, write `tests/guided-cases/.discovery.md`:
 - Completed: 0
 - In progress: 0
 - Pending: [N]
+
+## Execute Progress
+- Filter: [active filter, e.g., "P0" or "all"]
+- Current tier: [P0 | P1 | P2]
+- Current flow: [flow-name or "not started"]
+- Total cases matching filter: [N]
+- Passed: 0
+- Failed: 0
+- Skipped: 0
+- Pending: [N]
+- Report: [relative path to current report file, or "none"]
 ~~~
 
 **Estimation heuristic:** Each flow gets ~8-15 cases depending on surface type. UI flows average ~12 (coverage matrix has more dimensions). API flows average ~10. CLI flows average ~8.
