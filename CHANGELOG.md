@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Resume protocol for idempotent re-invocation across sessions
 - Discovery file (.discovery.md) for progress tracking
-- Flow-by-flow chunking in generate mode
+- Flow-by-flow chunking in generate mode with parallel subagent dispatch
 - Priority-tier-per-flow chunking in execute mode
 - External evidence storage (evidence/gc-XXX/ directories)
 - Incremental report writing in execute mode
