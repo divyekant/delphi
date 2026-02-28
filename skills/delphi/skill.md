@@ -279,8 +279,9 @@ Dispatch one subagent per pending flow using the Task tool. Each subagent:
 1. Receives: flow name, surface type, the coverage matrix (copy the relevant matrix below into the prompt), the guided case template, and the project's `tests/guided-cases/` path
 2. Scans existing case files in `tests/guided-cases/[flow-name]/` — skips already-generated coverage types
 3. Generates all missing cases for its flow using the matrix
-4. Writes each case file to disk immediately
+4. Writes each case file to disk immediately (use temporary IDs like `gc-FLOW-001`, final IDs assigned by main agent)
 5. Writes its flow's entries to a temporary index fragment: `tests/guided-cases/[flow-name]/.index-fragment.md`
+6. **MUST NOT write to `index.md` or `.discovery.md`** — these are owned by the main agent to avoid file conflicts
 
 After all subagents complete:
 1. Merge all `.index-fragment.md` files into `tests/guided-cases/index.md`
