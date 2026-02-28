@@ -1,7 +1,7 @@
 # Chunked Execution Design: Context-Resilient Delphi
 
 **Date**: 2026-02-27
-**Status**: Draft
+**Status**: Implemented
 **Problem**: Delphi has no strategy for context limits, token limits, or long conversation failures. Both generate and execute modes can exceed context windows on non-trivial projects.
 
 ## Design Principles
