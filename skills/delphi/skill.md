@@ -220,6 +220,34 @@ After discovery, show the user what you found:
 
 **Wait for user confirmation before proceeding to Step 3.** The user may want to scope down to specific flows.
 
+**Write the discovery file:**
+
+After user confirms flows, write `tests/guided-cases/.discovery.md`:
+
+~~~markdown
+# Delphi Discovery
+
+## Surfaces
+- [surface-type]: [flow names] ([count] flows)
+[repeat per surface type]
+
+## Flows
+| Flow | Surface | Est. Cases | Status |
+|------|---------|-----------|--------|
+| [flow-name] | [surface] | ~[estimate] | pending |
+[one row per confirmed flow]
+
+## Generate Progress
+- Total flows: [N]
+- Completed: 0
+- In progress: 0
+- Pending: [N]
+~~~
+
+**Estimation heuristic:** Each flow gets ~8-15 cases depending on surface type. UI flows average ~12 (coverage matrix has more dimensions). API flows average ~10. CLI flows average ~8.
+
+This file is the source of truth for all subsequent work. It MUST be written before generating any cases.
+
 ### Step 3: Case Generation
 
 For each confirmed flow, generate guided cases using this coverage matrix:
