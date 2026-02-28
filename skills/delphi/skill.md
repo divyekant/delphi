@@ -49,6 +49,43 @@ digraph mode {
 
 **Default behavior:** If guided cases don't exist yet, always Generate first. If they exist and user says "test" or "run", Execute.
 
+## Resume Protocol
+
+Every Delphi invocation starts here. Check disk state before doing any work.
+
+```dot
+digraph resume {
+    "Start" [shape=doublecircle];
+    ".discovery.md exists?" [shape=diamond];
+    "Fresh run" [shape=box, label="Fresh run:\nProceed to Generate Mode Step 1"];
+    "Read discovery" [shape=box, label="Read .discovery.md"];
+    "All flows generated?" [shape=diamond];
+    "Resume generation" [shape=box, label="Resume: pick next\npending flow (Step 3)"];
+    "Execute requested?" [shape=diamond];
+    "Check report" [shape=box, label="Read existing report"];
+    "Resume execution" [shape=box, label="Resume: pick next\nunrecorded case"];
+    "Done" [shape=doublecircle, label="All work complete"];
+
+    "Start" -> ".discovery.md exists?";
+    ".discovery.md exists?" -> "Fresh run" [label="no"];
+    ".discovery.md exists?" -> "Read discovery" [label="yes"];
+    "Read discovery" -> "All flows generated?";
+    "All flows generated?" -> "Resume generation" [label="no"];
+    "All flows generated?" -> "Execute requested?" [label="yes"];
+    "Execute requested?" -> "Check report" [label="yes"];
+    "Execute requested?" -> "Done" [label="no"];
+    "Check report" -> "Resume execution";
+}
+```
+
+**On fresh run:** No `.discovery.md` exists — proceed normally to Generate Mode Step 1.
+
+**On resume (generate):** Read `.discovery.md`, find first flow with status `pending` or `in_progress`, skip to Generate Mode Step 3 for that flow.
+
+**On resume (execute):** Read `.discovery.md` and existing report file, identify cases not yet recorded in the report, skip to Execute Mode Step 3 for the next unrecorded case.
+
+**Key rule:** Never re-do completed work. If a flow is marked `done`, skip it. If a case has a result in the report, skip it.
+
 ## Guided Case Format
 
 Every guided case MUST follow this exact template:
