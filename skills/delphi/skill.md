@@ -80,7 +80,7 @@ digraph resume {
 
 **On fresh run:** No `.discovery.md` exists — proceed normally to Generate Mode Step 1.
 
-**On resume (generate):** Read `.discovery.md`, find first flow with status `pending` or `in_progress`, skip to Generate Mode Step 3 for that flow.
+**On resume (generate):** Read `.discovery.md`, collect all flows with status `pending` or `in_progress`, skip to Generate Mode Step 3 which will dispatch them (in parallel if possible, or sequentially).
 
 **On resume (execute):** Read `.discovery.md` and existing report file, identify cases not yet recorded in the report, skip to Execute Mode Step 3 for the next unrecorded case.
 
@@ -275,6 +275,8 @@ Collect all pending flows from `.discovery.md` (status `pending` or `in_progress
 
 **Parallel dispatch (preferred — use when the Task tool is available):**
 
+Before dispatching, mark all pending flows as `in_progress` in `.discovery.md`. This signals that parallel work was attempted — if context is lost, a resume will scan disk for partial results.
+
 Dispatch one subagent per pending flow using the Task tool. Each subagent:
 1. Receives: flow name, surface type, the coverage matrix (copy the relevant matrix below into the prompt), the guided case template, and the project's `tests/guided-cases/` path
 2. Scans existing case files in `tests/guided-cases/[flow-name]/` — skips already-generated coverage types
@@ -364,7 +366,8 @@ Cases are written to disk during Step 3 (not batched until the end). This step h
 1. **If parallel dispatch was used:** Merge index fragments.
    - Read each `tests/guided-cases/[flow-name]/.index-fragment.md`
    - Assign sequential GC-XXX IDs across all flows (subagents use temporary IDs)
-   - Rename case files to match final GC-XXX IDs
+   - Rename case files to match final GC-XXX IDs (e.g., `gc-auth-001.md` → `gc-001-login-happy-path.md`)
+   - Update file paths in index entries to match renamed files
    - Merge all entries into `tests/guided-cases/index.md`
    - Delete `.index-fragment.md` files
 
