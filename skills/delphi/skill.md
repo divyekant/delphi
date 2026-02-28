@@ -82,7 +82,7 @@ digraph resume {
 
 **On resume (generate):** Read `.discovery.md`, collect all flows with status `pending` or `in_progress`, skip to Generate Mode Step 3 which will dispatch them (in parallel if possible, or sequentially).
 
-**On resume (execute):** Read `.discovery.md` and existing report file, identify cases not yet recorded in the report, skip to Execute Mode Step 3 for the next unrecorded case.
+**On resume (execute):** Read `.discovery.md` and existing report file. Also scan for any `.report-fragment.md` files in flow directories — these indicate partial parallel execution. Merge fragment results with the main report to build the complete list of already-completed cases. Skip to Execute Mode Step 2 (to re-classify remaining flows) then Step 3 for unrecorded cases only.
 
 **Key rule:** Never re-do completed work. If a flow is marked `done`, skip it. If a case has a result in the report, skip it.
 
@@ -455,24 +455,63 @@ Route each case to the right execution method based on its Surface metadata:
 - If Surface is `api` and the app is not running: mark case as **skipped** with reason "App not running"
 - If Surface is `cli` and the command is not installed: mark case as **skipped** with reason "Command not found"
 
-Tell the user how many cases will be executed and how many skipped before starting.
+**Classify flows for parallel vs. sequential execution:**
+
+Scan all non-skipped cases and bucket their flows:
+
+| Bucket | Criteria | Execution |
+|--------|----------|-----------|
+| **Parallel** | Flow has ZERO `ui` surface cases in the execution list | One subagent per flow, all dispatched concurrently |
+| **Sequential** | Flow has ANY `ui` surface case in the execution list | Run one flow at a time on the shared browser |
+
+Mixed flows (both UI and non-UI cases) go to the **sequential** bucket — do not split a flow across strategies.
+
+Tell the user:
+- How many cases will be executed and how many skipped
+- How many flows will run in parallel vs. sequentially
+- Which flows are in each bucket
 
 ### Step 3: Execute Cases
 
-**Chunking: one priority tier per flow at a time.**
+**Parallel dispatch for non-UI flows, sequential for UI flows.**
 
-Execution order: P0 cases across all flows first, then P1, then P2.
+Collect all flows from the classification in Step 2.
 
-Within each tier, work one flow at a time:
-1. Select all cases for current priority tier + current flow
-2. Execute them (steps 3a-3c below)
-3. After each case: append result to report file immediately
-4. Update `.discovery.md` execute progress counts
-5. Move to next flow in this tier, then next tier
+**Parallel dispatch (preferred — use when the Agent tool is available):**
 
-**If context is lost mid-tier:** Next invocation reads the report, identifies which cases have results, and picks up from the next unrecorded case.
+Before dispatching, update `.discovery.md` execute progress to mark parallel flows as `in_progress`.
 
-For each case, in order:
+Dispatch one subagent per parallel flow using the Agent tool. Each subagent receives:
+1. Flow name and all case files for that flow (full markdown content — subagents cannot read the skill file)
+2. The execution instructions for steps 3a-3c below (copy them into the subagent prompt)
+3. The surface-to-tool mapping table from Step 2
+4. Evidence output path: `tests/guided-cases/evidence/`
+5. Fragment output path: `tests/guided-cases/[flow-name]/.report-fragment.md`
+
+Each subagent:
+1. Executes all cases for its flow in priority order (P0 → P1 → P2) using steps 3a-3c
+2. Writes evidence files to `tests/guided-cases/evidence/gc-XXX/`
+3. Writes a `.report-fragment.md` in the flow directory with per-case results
+4. **MUST NOT write to the main report file, `.discovery.md`, or `index.md`** — these are owned by the main agent
+
+**Important for subagent prompts:** Include the COMPLETE execution instructions (steps 3a-3c), surface-to-tool mapping, and evidence capture rules in each subagent's prompt. Subagents do NOT have access to the skill file — they need everything inline.
+
+**Sequential execution for UI flows (runs concurrently with parallel dispatch):**
+
+While parallel subagents are running, the main agent executes UI flows one at a time on the shared browser:
+1. Select next UI flow
+2. Execute all cases in priority order (P0 → P1 → P2) using steps 3a-3c
+3. Write `.report-fragment.md` in the flow directory
+4. Write evidence to `tests/guided-cases/evidence/gc-XXX/`
+5. Move to next UI flow
+
+**Sequential fallback (when Agent tool is unavailable or only 1-2 total flows):**
+
+Execute all flows sequentially, one flow at a time, all cases in priority order. Write results directly to the report file (no fragments needed). This is the pre-parallel behavior.
+
+**If context is lost mid-execution:** Next invocation reads the report + any `.report-fragment.md` files, identifies which cases have results, and picks up from the next unrecorded case. Partial fragments from crashed subagents are preserved.
+
+For each case (used by both subagents and main agent), in order:
 
 **3a. Verify Preconditions**
 - Check each precondition listed in the case
@@ -517,16 +556,30 @@ For each numbered step in the case:
 - Check failure criteria — none must be true
 - Final determination: PASS or FAIL
 
-### Step 4: Report (Incremental)
+### Step 4: Report (Merge + Finalize)
 
-The report file is written incrementally during Step 3 — one entry per case as it completes.
+**If parallel dispatch was used:** Merge fragments before writing the final report.
 
-1. **On first case:** Create the report file with the header (run metadata, filter info)
-2. **After each case:** Append the case result (pass/fail/skip + evidence paths)
-3. **On completion (or resume completion):** Add the summary section (totals, percentages)
-4. **Evidence references:** Always use relative paths (`evidence/gc-XXX/step-N.png`), never inline content
+1. Wait for all subagents to complete
+2. Read all `.report-fragment.md` files from `tests/guided-cases/[flow-name]/`
+3. Combine with results from sequentially-executed UI flows
+4. Write the merged report to `tests/guided-cases/reports/YYYY-MM-DD-HH-MM-report.md`
+5. Compute aggregate stats (passed/failed/skipped counts + percentages)
+6. Clean up `.report-fragment.md` files
 
-**Report file:** `tests/guided-cases/reports/YYYY-MM-DD-HH-MM-report.md`
+**If sequential fallback was used:** The report was written incrementally during Step 3. Just add the summary section.
+
+**Report fragment format** (written by each subagent):
+
+~~~markdown
+## [Flow Name] Results
+
+| ID | Title | Result | Failed Step | Evidence |
+|----|-------|--------|-------------|----------|
+| GC-XXX | Title | passed/failed/skipped | N/A or step N | `evidence/gc-XXX/` |
+~~~
+
+**Final report file:** `tests/guided-cases/reports/YYYY-MM-DD-HH-MM-report.md`
 
 Report format:
 
@@ -536,6 +589,7 @@ Report format:
 **Run**: YYYY-MM-DD HH:MM
 **Cases Executed**: X of Y total
 **Filters**: [filters applied, or "none"]
+**Execution**: [parallel (N flows) + sequential (M UI flows) | sequential only]
 
 ## Results
 - **Passed**: X (XX%)
@@ -575,9 +629,11 @@ Report format:
 **After writing the report:**
 
 1. Update `tests/guided-cases/index.md` — set each executed case's Status column to `passed`, `failed`, or `skipped`, and update the Last Executed date in each case's metadata
-2. Report summary to user:
+2. Update `.discovery.md` execute progress counts
+3. Report summary to user:
 
 > **Delphi Execution Report**
 > - Passed: X | Failed: X | Skipped: X
+> - Execution: [N flows parallel + M UI flows sequential | sequential only]
 > - Report saved to `tests/guided-cases/reports/YYYY-MM-DD-HH-MM-report.md`
 > - [If failures] X failures need attention — check the report for details.
