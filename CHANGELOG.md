@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-02-28
+
+### Added
+- Precondition classification: Environment (can't create) vs Data (tagged with local-db/external/inline source)
+- Test data strategy: inline crafted values for boundary, validation, negative, and security cases
+- Phase-aware model selection: generate defaults to opus, execute subagents default to sonnet, user-overridable
+- Data strategy guidance in coverage matrix section
+- Concrete precondition examples in guided case template
+
+### Changed
+- Generation rule 4 expanded with specific guidance for happy path, boundary, validation, and negative test values
+- Execute Step 3a now uses two-pass precondition verification (environment first, data second)
+- Subagent dispatch lines include explicit model parameter
+
 ## [1.0.0] - 2026-02-27
 
 ### Added

@@ -1,6 +1,6 @@
 # Apollo Project Config — Delphi
 extends: oss
-version: 1.0.0
+version: 1.1.0
 
 stack:
   language: markdown
