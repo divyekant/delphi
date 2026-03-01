@@ -49,6 +49,22 @@ digraph mode {
 
 **Default behavior:** If guided cases don't exist yet, always Generate first. If they exist and user says "test" or "run", Execute.
 
+## Model Selection
+
+Delphi uses different models per phase to balance reasoning quality with cost:
+
+| Phase | Default Model | Override Example |
+|-------|--------------|------------------|
+| Generate | opus | "generate with sonnet" |
+| Execute (orchestrator) | inherits session model | — |
+| Execute (subagents) | sonnet | "execute with opus" |
+
+- Generate runs once and needs deep analytical reasoning for thorough edge case discovery
+- Execute subagents are the cost multiplier — procedural step-following at high volume
+- User override: any explicit model instruction (e.g., "use haiku for subagents") takes precedence
+
+When dispatching subagents via the Agent tool, pass the `model` parameter with the selected model.
+
 ## Resume Protocol
 
 Every Delphi invocation starts here. Check disk state before doing any work.
@@ -104,7 +120,21 @@ Every guided case MUST follow this exact template:
 
 ## Preconditions
 
-Bullet list of what must be true before this case starts. Each must be verifiable.
+### Environment
+Bullet list of what must be true about the runtime environment. These CANNOT be created by the agent.
+Examples: app running at URL, API endpoint reachable, CLI tool installed, external service accessible, user has required role/permissions.
+
+### Data
+Bullet list of data that must exist. Each tagged with source and optional setup instruction.
+Sources: `local-db` | `external/<service>` | `inline`
+- `local-db` — agent can attempt to create via API/UI using the setup instruction
+- `external/<service>` — developer must provide, or case skips
+- `inline` — value is crafted directly in the step, no external dependency
+
+Example:
+- User account exists (source: local-db, setup: POST /api/users with test data)
+- Stripe customer exists (source: external/stripe, setup: dev-provided)
+- Negative amount value (source: inline)
 
 ## Steps
 
@@ -277,7 +307,7 @@ Collect all pending flows from `.discovery.md` (status `pending` or `in_progress
 
 Before dispatching, mark all pending flows as `in_progress` in `.discovery.md`. This signals that parallel work was attempted — if context is lost, a resume will scan disk for partial results.
 
-Dispatch one subagent per pending flow using the Task tool. Each subagent:
+Dispatch one subagent per pending flow using the Agent tool with `model: "opus"` (or user-specified override). Each subagent:
 1. Receives: flow name, surface type, the coverage matrix (copy the relevant matrix below into the prompt), the guided case template, and the project's `tests/guided-cases/` path
 2. Scans existing case files in `tests/guided-cases/[flow-name]/` — skips already-generated coverage types
 3. Generates all missing cases for its flow using the matrix
@@ -306,6 +336,8 @@ For each flow listed in `.discovery.md`:
 8. Proceed to next flow
 
 **If context is lost mid-flow:** The next invocation reads `.discovery.md`, sees the flow is `in_progress`, scans its directory for existing cases, and generates only the missing ones.
+
+**Data strategy for coverage:** Boundary, validation, negative, and security cases should use inline crafted test values rather than assuming environment data exists. Only happy-path and integration cases should depend on real environment data. Tag data preconditions accordingly.
 
 For each flow, generate guided cases using this coverage matrix:
 
@@ -345,7 +377,12 @@ For each flow, generate guided cases using this coverage matrix:
 1. Use the EXACT guided case template from the "Guided Case Format" section above
 2. Every case gets a unique `GC-XXX` ID, sequential across the project
 3. Be SPECIFIC in steps — name exact URLs, exact button text, exact field names, exact API endpoints, exact commands
-4. Include realistic test data in steps (not placeholders like "enter a value")
+4. Include specific test values in steps — NEVER use placeholders like "enter a value":
+   - **Happy path**: Use realistic values (e.g., "John Doe", "john@example.com", "$49.99")
+   - **Boundary/edge**: Generate crafted values inline (e.g., `-1`, `0`, `999999999`, empty string `""`)
+   - **Validation**: Include invalid inputs that test error handling (e.g., `<script>alert(1)</script>`, SQL injection strings, strings exceeding max length)
+   - **Negative cases**: Include values that SHOULD be rejected — the expected outcome is an error message or validation failure
+   - Crafted test values require no external data — tag these data preconditions as `source: inline`
 5. Each case tests ONE scenario — don't combine multiple scenarios in one case
 6. Write expected outcomes that are observable and verifiable (not vague like "page works correctly")
 
@@ -481,7 +518,7 @@ Collect all flows from the classification in Step 2.
 
 Before dispatching, update `.discovery.md` execute progress to mark parallel flows as `in_progress`.
 
-Dispatch one subagent per parallel flow using the Agent tool. Each subagent receives:
+Dispatch one subagent per parallel flow using the Agent tool with `model: "sonnet"` (or user-specified override). Each subagent receives:
 1. Flow name and all case files for that flow (full markdown content — subagents cannot read the skill file)
 2. The execution instructions for steps 3a-3c below (copy them into the subagent prompt)
 3. The surface-to-tool mapping table from Step 2
@@ -514,9 +551,17 @@ Execute all flows sequentially, one flow at a time, all cases in priority order.
 For each case (used by both subagents and main agent), in order:
 
 **3a. Verify Preconditions**
-- Check each precondition listed in the case
-- If a precondition is not met and CAN be set up (e.g., "navigate to login page"), do it
-- If a precondition is not met and CANNOT be set up (e.g., "user account exists"), mark case as **skipped** with reason
+
+**Environment preconditions (check first):**
+- Check each environment precondition (app running, API reachable, CLI installed, etc.)
+- If ANY environment precondition is not met → skip case with reason
+- Do NOT attempt to create environment prerequisites
+
+**Data preconditions (check second, only if environment passed):**
+- For each data precondition, check the source tag:
+  - `local-db`: attempt setup using the provided setup instruction. If setup fails → skip with reason.
+  - `external/<service>`: check if data exists. If not → skip with reason "requires \<service\> test data".
+  - `inline`: no check needed — the test value is crafted directly in the step itself.
 
 **3b. Execute Each Step**
 
